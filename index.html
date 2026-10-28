@@ -303,7 +303,7 @@ function netMsg(m,j){const N=NET;if(!N||!m)return;
  if(m.t=='rm'){N.rmR[m.p]=1;if(N.role==0){bcast(m,j);netRmCheck()}}}
 function resetSel(){sel.forEach(s=>{s.c=0;s.sk=0;s.ok=0})}
 function netLink(p){const N=NET;if(N.role==0){N.conn=(N.conn||0)+1;lsend(p,{t:'welcome',p:+p,n:N.n});if(N.conn>=N.n-1)netBegin();else if(N.man)netManualOffer(N)}else{N.linked=1;N.st='lobby'}}
-function netBegin(){const N=NET;if(MODE>2)MODE=0;const cfg={MP,MODE,OV,OT,OC,n:N.n};bcast({t:'go',cfg});netGo(cfg)}
+function netBegin(){const N=NET;try{N.rl&&N.rl.close()}catch(e){}if(MODE>2)MODE=0;const cfg={MP,MODE,OV,OT,OC,n:N.n};bcast({t:'go',cfg});netGo(cfg)}
 function netGo(c){const N=NET;if(!N||N.ready)return;N.ready=1;ONLINE=1;ME=N.role;N.n=NP=c.n;NB=0;MP=c.MP;MODE=c.MODE;OV=c.OV;OT=c.OT;OC=c.OC;N.rd=0;N.rmR={};resetSel();Object.assign(sel[ME],{c:rnd(),sk:0,ok:0});state='sel';bcast({t:'sel',p:ME,c:sel[ME].c,sk:0,ok:0})}
 function netCfg(rd){const N=NET;return{MP,MODE,OV,OT,OC,n:N.n,seed:Math.random()*4294967296|0,rd,sel:sel.slice(0,N.n).map(s=>({c:s.c,sk:s.sk}))}}
 function netSelCheck(){const N=NET;if(!N||N.role!=0||N.run||!N.ready||!sel.slice(0,N.n).every(s=>s.ok))return;const cfg=netCfg(1);bcast({t:'start',cfg});startOnline(cfg)}
@@ -316,25 +316,40 @@ function onSelKey(e){const N=NET,s=sel[N.role],c=e.code;let ch=0;
  else if((c=='KeyW'||c=='ArrowUp')&&!e.repeat){s.sk=(s.sk+1)%4;ch=1}
  else if((c=='KeyS'||c=='ArrowDown'||c=='Enter')&&!e.repeat){s.ok=s.ok?0:1;ch=1}
  if(ch){sfx(500,.04);bcast({t:'sel',p:N.role,c:s.c,sk:s.sk,ok:s.ok});netSelCheck()}}
-function netLeave(msg){const N=NET;NET=msg?{st:'err',msg}:null;ONLINE=0;OIN=null;RS=0;ps=[];pz=0;pj=[];cr=[];rg_=[];state=msg?'net':'menu';resetSel();try{N&&N.peer&&N.peer.destroy()}catch(e){}}
+function netLeave(msg){const N=NET;NET=msg?{st:'err',msg}:null;ONLINE=0;OIN=null;RS=0;ps=[];pz=0;pj=[];cr=[];rg_=[];state=msg?'net':'menu';resetSel();try{N&&N.peer&&N.peer.destroy()}catch(e){}try{N&&N.rl&&N.rl.close()}catch(e){}try{N&&N.pcs&&N.pcs.forEach(p=>p.close())}catch(e){}}
 function netFail(msg){NET={st:'err',msg};state='net'}
-function netAttach(N,c,p){const l=N.L[p]=N.L[p]||{};const go=()=>{if(NET!==N)return;l[c.label=='c'?'cc':'ci']=c;if(l.cc&&l.cc.open&&!l.rdy){l.rdy=1;netLink(p)}};c.on('open',go);if(c.open)go();c.on('data',m=>{if(NET===N)netMsg(m,p)});c.on('close',()=>{if(NET===N)netLeave('Um jogador saiu da sala.')});c.on('error',()=>{})}
-function netHost(){if(typeof Peer=='undefined')return netFail('A biblioteca online não carregou (sem internet ou bloqueada).');
+function netAttach(N,c,p){const l=N.L[p]=N.L[p]||{};const go=()=>{if(NET!==N)return;l[c.label=='c'?'cc':'ci']=c;if(l.cc&&l.cc.open&&!l.rdy){l.rdy=1;netLink(p)}};c.on('open',go);if(c.open)go();c.on('data',m=>{if(NET===N)netMsg(m,p)});c.on('close',()=>{if(NET===N&&(N.ready||l.rdy||p==0))netLeave('Um jogador saiu da sala.')});c.on('error',()=>{})}
+function freeSlot(N){const u=Object.values(N.slots||{});for(let p=1;p<N.n;p++)if(!u.includes(p))return p;return 0}
+function rlOpen(topic,onmsg){const U='https://ntfy.sh/'+topic,o={send:m=>fetch(U,{method:'POST',body:JSON.stringify(m)}).catch(()=>{}),close:()=>{try{es.close()}catch(e){}}};let es;try{es=new EventSource(U+'/sse?since='+(Math.floor(Date.now()/1000)-120))}catch(e){o.fail=1;return o}es.onopen=()=>{o.ok=1};es.onerror=()=>{if(!o.ok)o.fail=1};es.onmessage=e=>{try{const d=JSON.parse(e.data);if(d.event=='message')onmsg(JSON.parse(d.message))}catch(x){}};return o}
+function relayJoin(N,m){if(NET!==N||N.ready)return;if(m.k=='a'){const r=N.rp[m.c];if(r&&!r.done){r.done=1;r.pc.setRemoteDescription(m.s).catch(()=>{})}return}if(m.k!='j'||N.rp[m.c])return;const p=freeSlot(N);if(!p)return;
+ const drop=()=>{const r=N.rp[m.c];if(!r)return;clearTimeout(r.t);delete N.slots['r'+m.c];delete N.rp[m.c];if(!(N.L[p]&&N.L[p].rdy))delete N.L[p];try{r.pc.close()}catch(e){}};
+ const pc=netNewPc(N,drop),r=N.rp[m.c]={pc,p};N.slots['r'+m.c]=p;r.t=setTimeout(()=>{if(!(N.L[p]&&N.L[p].rdy))drop()},30000);
+ netAttach(N,dcWrap(pc.createDataChannel('c')),p);netAttach(N,dcWrap(pc.createDataChannel('i',{ordered:false,maxRetransmits:0})),p);
+ pc.createOffer().then(o=>pc.setLocalDescription(o)).then(()=>icGather(pc)).then(()=>{if(NET===N&&N.rp[m.c])N.rl.send({k:'o',c:m.c,s:pc.localDescription})}).catch(drop)}
+function relayClient(N){if(N.fb||NET!==N)return;N.fb=1;
+ const pc=netNewPc(N,()=>netLeave('Não deu para conectar direto. A rede isola os PCs?'));pc.ondatachannel=e=>netAttach(N,dcWrap(e.channel),0);
+ N.rl=rlOpen('nrmp-'+N.code,m=>{if(m.k=='o'&&m.c==N.cid&&!N.gotO){N.gotO=1;pc.setRemoteDescription(m.s).then(()=>pc.createAnswer()).then(a=>pc.setLocalDescription(a)).then(()=>icGather(pc)).then(()=>N.rl.send({k:'a',c:N.cid,s:pc.localDescription})).catch(()=>{})}});
+ let n=0;const tick=()=>{if(NET!==N||N.gotO||N.linked||n++>8)return;if(N.rl.ok)N.rl.send({k:'j',c:N.cid});setTimeout(tick,2000)};tick()}
+function netHost(){
  let code='';for(let i=0;i<4;i++)code+=CODEC[Math.random()*CODEC.length|0];
- const N=NET={st:'host',role:0,n:Math.min(4,Math.max(2,NP)),code,rh:{},hh:{},L:{},pm:{},conn:0};ME=0;state='net';resetSel();
- const pr=N.peer=new Peer('ninjarumble-'+code);
- pr.on('connection',c=>{let p=N.pm[c.peer];if(!p){const k=Object.keys(N.pm).length;if(N.ready||k>=N.n-1){c.close();return}p=N.pm[c.peer]=k+1}netAttach(N,c,p)});
- pr.on('error',e=>{if(NET!==N)return;if(e.type=='unavailable-id'){netLeave();netHost()}else netLeave('Erro de conexão: '+e.type)})}
-function netJoin(code){if(typeof Peer=='undefined')return netFail('A biblioteca online não carregou (sem internet ou bloqueada).');
- const N=NET={st:'conn',role:1,n:2,code,rh:{},hh:{},L:{}};ME=1;resetSel();
- const pr=N.peer=new Peer();
- pr.on('open',()=>{const id='ninjarumble-'+code;netAttach(N,pr.connect(id,{label:'c',reliable:true,serialization:'json'}),0);netAttach(N,pr.connect(id,{label:'i',reliable:false,serialization:'json'}),0)});
- pr.on('error',e=>{if(NET!==N)return;netLeave(e.type=='peer-unavailable'?'Sala não encontrada. Confira o código.':'Erro de conexão: '+e.type)});
- setTimeout(()=>{if(NET===N&&!N.linked)netLeave('Não foi possível conectar (rede bloqueada?).')},15000)}
+ const N=NET={st:'host',role:0,n:Math.min(4,Math.max(2,NP)),code,rh:{},hh:{},L:{},slots:{},rp:{},pcs:[],conn:0};ME=0;state='net';resetSel();
+ if(typeof RTCPeerConnection!='undefined')N.rl=rlOpen('nrmp-'+code,m=>relayJoin(N,m));
+ if(typeof Peer!='undefined'){const pr=N.peer=new Peer('ninjarumble-'+code);
+  pr.on('connection',c=>{let p=N.slots[c.peer];if(!p){if(N.ready||!(p=freeSlot(N))){c.close();return}N.slots[c.peer]=p}netAttach(N,c,p)});
+  pr.on('error',e=>{if(NET!==N)return;if(e.type=='unavailable-id'){netLeave();netHost()}})}
+ setTimeout(()=>{if(NET===N&&!N.ready&&!(N.rl&&N.rl.ok)&&!(N.peer&&N.peer.open))netLeave('Não foi possível criar a sala (rede bloqueada?). Use M / J (sem servidor).')},12000)}
+function netJoin(code){
+ const N=NET={st:'conn',role:1,n:2,code,cid:Math.random().toString(36).slice(2),rh:{},hh:{},L:{},pcs:[]};ME=1;resetSel();
+ const fb=()=>{if(NET===N&&!N.linked&&!N.fb&&typeof RTCPeerConnection!='undefined')relayClient(N)};
+ if(typeof Peer=='undefined')fb();else{
+  const pr=N.peer=new Peer(),t=setTimeout(fb,5000);
+  pr.on('open',()=>{clearTimeout(t);if(N.fb)return;const id='ninjarumble-'+code;netAttach(N,pr.connect(id,{label:'c',reliable:true,serialization:'json'}),0);netAttach(N,pr.connect(id,{label:'i',reliable:false,serialization:'json'}),0)});
+  pr.on('error',e=>{clearTimeout(t);fb()})}
+ setTimeout(()=>{if(NET===N&&!N.linked)netLeave('Sala não encontrada ou rede bloqueada. Confira o código ou use o modo sem servidor (J).')},32000)}
 function icGather(pc){return new Promise(r=>{if(pc.iceGatheringState=='complete')return r();const t=setTimeout(r,4000);pc.addEventListener('icegatheringstatechange',()=>{if(pc.iceGatheringState=='complete'){clearTimeout(t);r()}})})}
 function dcWrap(d){const h={},f=(e,a)=>(h[e]||[]).forEach(g=>g(a));d.onopen=()=>f('open');d.onclose=()=>f('close');d.onerror=()=>f('error');d.onmessage=e=>{try{f('data',JSON.parse(e.data))}catch(x){}};return{label:d.label,get open(){return d.readyState=='open'},send:m=>d.send(JSON.stringify(m)),on:(e,g)=>{(h[e]=h[e]||[]).push(g)}}}
 function netCopy(N,ask){try{navigator.clipboard.writeText(N.txt).then(()=>{N.copied=1},()=>{if(ask)prompt('Copie o código (Ctrl+C):',N.txt)})}catch(e){if(ask)prompt('Copie o código (Ctrl+C):',N.txt)}}
-function netNewPc(N){const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});N.pc=pc;N.pcs.push(pc);pc.oniceconnectionstatechange=()=>{if(NET===N&&!N.ready&&pc.iceConnectionState=='failed')netLeave('Não deu para conectar direto. A rede isola os PCs?')};return pc}
+function netNewPc(N,fail){const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});N.pc=pc;N.pcs.push(pc);pc.oniceconnectionstatechange=()=>{if(NET===N&&!N.ready&&pc.iceConnectionState=='failed')fail?fail():netLeave('Não deu para conectar direto. A rede isola os PCs?')};return pc}
 function netManualOffer(N){const slot=N.conn+1;N.slot=slot;N.txt=null;N.note='';N.st='mhost';const pc=netNewPc(N);
  netAttach(N,dcWrap(pc.createDataChannel('c')),slot);netAttach(N,dcWrap(pc.createDataChannel('i',{ordered:false,maxRetransmits:0})),slot);
  pc.createOffer().then(o=>pc.setLocalDescription(o)).then(()=>icGather(pc)).then(()=>{if(NET!==N||N.pc!==pc)return;N.txt='NR1:'+btoa(JSON.stringify(pc.localDescription));netCopy(N)}).catch(()=>netLeave('Não foi possível gerar o código.'))}
