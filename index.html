@@ -322,18 +322,39 @@ function netJoin(code){if(typeof Peer=='undefined')return netFail('A biblioteca 
  pr.on('open',()=>{const id='ninjarumble-'+code;netAttach(N,pr.connect(id,{label:'c',reliable:true,serialization:'json'}));netAttach(N,pr.connect(id,{label:'i',reliable:false,serialization:'json'}))});
  pr.on('error',e=>{if(NET!==N)return;netLeave(e.type=='peer-unavailable'?'Sala não encontrada. Confira o código.':'Erro de conexão: '+e.type)});
  setTimeout(()=>{if(NET===N&&!N.ready)netLeave('Não foi possível conectar (rede bloqueada?).')},15000)}
+function icGather(pc){return new Promise(r=>{if(pc.iceGatheringState=='complete')return r();const t=setTimeout(r,4000);pc.addEventListener('icegatheringstatechange',()=>{if(pc.iceGatheringState=='complete'){clearTimeout(t);r()}})})}
+function dcWrap(d){const h={},f=(e,a)=>(h[e]||[]).forEach(g=>g(a));d.onopen=()=>f('open');d.onclose=()=>f('close');d.onerror=()=>f('error');d.onmessage=e=>{try{f('data',JSON.parse(e.data))}catch(x){}};return{label:d.label,get open(){return d.readyState=='open'},send:m=>d.send(JSON.stringify(m)),on:(e,g)=>{(h[e]=h[e]||[]).push(g)}}}
+function netCopy(N,ask){try{navigator.clipboard.writeText(N.txt).then(()=>{N.copied=1},()=>{if(ask)prompt('Copie o código (Ctrl+C):',N.txt)})}catch(e){if(ask)prompt('Copie o código (Ctrl+C):',N.txt)}}
+function netManual(host){if(typeof RTCPeerConnection=='undefined')return netFail('Seu navegador não suporta conexão direta.');
+ const N=NET={st:host?'mhost':'mwait',role:host?0:1,rh:{},hh:{},txt:null};ME=N.role;state='net';resetSel();
+ const pc=N.pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});N.peer={destroy:()=>pc.close()};
+ pc.oniceconnectionstatechange=()=>{if(NET===N&&!N.ready&&pc.iceConnectionState=='failed')netLeave('Não deu para conectar direto. A rede isola os PCs?')};
+ if(host){netAttach(N,dcWrap(pc.createDataChannel('c')));netAttach(N,dcWrap(pc.createDataChannel('i',{ordered:false,maxRetransmits:0})));
+  pc.createOffer().then(o=>pc.setLocalDescription(o)).then(()=>icGather(pc)).then(()=>{if(NET!==N)return;N.txt='NR1:'+btoa(JSON.stringify(pc.localDescription));netCopy(N)}).catch(()=>netLeave('Não foi possível gerar o código.'))}
+ else pc.ondatachannel=e=>netAttach(N,dcWrap(e.channel))}
+function netPaste(t){const N=NET;if(!N||state!='net'||!N.pc)return;t=String(t).replace(/\s+/g,'');const i=t.indexOf('NR1:');let d;try{if(i<0)throw 0;d=JSON.parse(atob(t.slice(i+4)))}catch(e){N.note='Código inválido. Copie o código inteiro e cole de novo.';return}
+ const pc=N.pc;
+ if(N.st=='mhost'&&N.txt&&d.type=='answer'){N.note='';pc.setRemoteDescription(d).catch(()=>{N.note='Resposta inválida.'})}
+ else if(N.st=='mwait'&&d.type=='offer'){N.note='';N.st='mjoin';pc.setRemoteDescription(d).then(()=>pc.createAnswer()).then(a=>pc.setLocalDescription(a)).then(()=>icGather(pc)).then(()=>{if(NET!==N)return;N.txt='NR1:'+btoa(JSON.stringify(pc.localDescription));netCopy(N)}).catch(()=>netLeave('Código inválido.'))}
+ else N.note='Esse não é o código que se espera agora.'}
+addEventListener('paste',e=>{try{netPaste(e.clipboardData.getData('text'))}catch(x){}});
 function netKey(e){const c=e.code,N=NET||(NET={st:'idle'});
- if(N.st=='idle'||N.st=='err'){if(c=='Escape'){NET=null;state='menu';return}if(c=='KeyC')netHost();if(c=='KeyE')NET={st:'code',buf:''};return}
+ if(N.st=='idle'||N.st=='err'){if(c=='Escape'){NET=null;state='menu';return}if(c=='KeyC')netHost();if(c=='KeyE')NET={st:'code',buf:''};if(c=='KeyM')netManual(1);if(c=='KeyJ')netManual(0);return}
+ if((N.st=='mhost'||N.st=='mjoin')&&c=='KeyC'&&N.txt&&!e.ctrlKey){netCopy(N,1);return}
  if(N.st=='code'){if(c=='Escape'){NET={st:'idle'};return}if(c=='Backspace')N.buf=N.buf.slice(0,-1);else if(c=='Enter'){if(N.buf.length==4)netJoin(N.buf)}else if(e.key&&e.key.length==1&&/[A-Za-z0-9]/.test(e.key)&&N.buf.length<4)N.buf+=e.key.toUpperCase();return}
  if(c=='Escape')netLeave()}
-function drawNet(){X.fillStyle='rgba(8,16,40,.94)';X.fillRect(0,0,1280,720);X.textAlign='center';X.font='bold 72px Impact,Arial Black,sans-serif';X.lineWidth=12;X.lineJoin='round';X.strokeStyle='#243a8a';X.strokeText('JOGAR ONLINE',640,130);X.fillStyle='#fff';X.fillText('JOGAR ONLINE',640,130);
+function drawNet(){X.fillStyle='rgba(8,16,40,.86)';X.fillRect(0,0,1280,720);X.fillStyle='rgba(36,58,138,.35)';X.beginPath();X.roundRect?X.roundRect(240,190,800,440,28):X.rect(240,190,800,440);X.fill();X.textAlign='center';X.font='bold 72px Impact,Arial Black,sans-serif';X.lineWidth=12;X.lineJoin='round';X.strokeStyle='#243a8a';X.strokeText('JOGAR ONLINE',640,130);X.fillStyle='#fff';X.fillText('JOGAR ONLINE',640,130);
  const N=NET||{st:'idle'};let L=[];
- if(N.st=='idle')L=[['C  ·  Criar sala','#ffd54a',40],['E  ·  Entrar numa sala','#4be08a',40],['',0,10],['Mapa e modo são os escolhidos no menu (quem cria a sala decide).','#b9c4e6',18],['ESC  ·  Voltar','#b9c4e6',24]];
+ if(N.st=='idle')L=[['C  ·  Criar sala','#ffd54a',40],['E  ·  Entrar numa sala','#4be08a',40],['M  ·  Criar sala sem servidor','#7fd4ff',30],['J  ·  Entrar sem servidor (colar código)','#7fd4ff',30],['',0,10],['Mapa e modo são os escolhidos no menu (quem cria a sala decide).','#b9c4e6',18],['ESC  ·  Voltar','#b9c4e6',24]];
  else if(N.st=='host')L=[['Código da sua sala','#b9c4e6',26],[N.code,'#ffd54a',110],['Mande esse código ao seu amigo e espere ele entrar...','#fff',24],['ESC  ·  Cancelar','#b9c4e6',20]];
  else if(N.st=='code')L=[['Digite o código da sala','#b9c4e6',26],[(N.buf+'____').slice(0,4).split('').join(' '),'#4be08a',110],['ENTER entra · BACKSPACE apaga · ESC volta','#b9c4e6',20]];
  else if(N.st=='conn')L=[['Conectando à sala '+N.code+'...','#fff',34],['ESC  ·  Cancelar','#b9c4e6',20]];
- else if(N.st=='err')L=[[N.msg,'#ff8a80',28],['',0,10],['C  ·  Criar sala','#ffd54a',34],['E  ·  Entrar numa sala','#4be08a',34],['ESC  ·  Menu','#b9c4e6',22]];
- let y=250;L.forEach(r=>{if(r[0]){X.font='bold '+r[2]+(r[2]>=100?'px Impact,Arial Black,sans-serif':'px sans-serif');X.fillStyle=r[1];X.fillText(r[0],640,y)}y+=r[2]+22})}
+ else if(N.st=='err')L=[[N.msg,'#ff8a80',28],['',0,10],['C  ·  Criar sala','#ffd54a',34],['E  ·  Entrar numa sala','#4be08a',34],['M  ·  Criar sala sem servidor','#7fd4ff',26],['J  ·  Entrar sem servidor','#7fd4ff',26],['ESC  ·  Menu','#b9c4e6',22]];
+ else if(N.st=='mhost')L=!N.txt?[['Gerando código...','#fff',34],['ESC  ·  Cancelar','#b9c4e6',20]]:[['1) Código copiado! Mande ao amigo (C copia de novo)','#ffd54a',26],['2) Ele vai te mandar uma RESPOSTA: cole aqui com Ctrl+V','#4be08a',26],['Aguardando...','#b9c4e6',22],['ESC  ·  Cancelar','#b9c4e6',20]];
+ else if(N.st=='mwait')L=[['Cole o código do host com Ctrl+V','#4be08a',34],['ESC  ·  Cancelar','#b9c4e6',20]];
+ else if(N.st=='mjoin')L=!N.txt?[['Gerando resposta...','#fff',34],['ESC  ·  Cancelar','#b9c4e6',20]]:[['Resposta copiada! Mande ao host (C copia de novo)','#ffd54a',28],['Conectando...','#fff',24],['ESC  ·  Cancelar','#b9c4e6',20]];
+ if(N.note)L.unshift([N.note,'#ff8a80',22]);
+ let y=235;L.forEach(r=>{if(r[0]){X.font='bold '+r[2]+(r[2]>=100?'px Impact,Arial Black,sans-serif':'px sans-serif');X.fillStyle=r[1];X.fillText(r[0],640,y+r[2]*.8)}y+=r[2]+24})}
 function netHud(){if(!ONLINE||!NET||!NET.run)return;const N=NET;X.save();X.textAlign='left';X.font='bold 14px sans-serif';const ms=N.rtt?Math.round(N.rtt):'--';X.fillStyle=!N.rtt?'#b9c4e6':N.rtt<80?'#4be08a':N.rtt<150?'#ffd54a':'#ff5a7a';X.beginPath();X.arc(26,704,6,0,7);X.fill();X.fillStyle='#fff';X.fillText('ONLINE · '+ms+' ms'+(N.stall?' · esperando o amigo...':''),40,709);X.restore()}
 const PS=[[],[],[],[]],PE=[0,0,0,0];
 function padPoll(){try{const gs=navigator.getGamepads?navigator.getGamepads():[],L=[];for(const g of gs)if(g&&g.connected)L.push(g);L.slice(0,4).forEach((g,i)=>{const b=n=>!!(g.buttons[n]&&g.buttons[n].pressed),ax=g.axes[0]||0,ay=g.axes[1]||0,sh=b(4)||b(5)||b(6),want=[sh||ax<-.45||b(14),sh||ax>.45||b(15),b(0)||b(12)||ay<-.7,b(2)||b(1)||b(3)||b(7)||ay>.75];want.forEach((w,j)=>{if(!!w!=!!PS[i][j]){PS[i][j]=!!w;dispatchEvent(new KeyboardEvent(w?'keydown':'keyup',{code:KEYS[i][j]}))}});const st=b(9);if(st!=PE[i]){PE[i]=st;dispatchEvent(new KeyboardEvent(st?'keydown':'keyup',{code:state=='play'||pz?'KeyP':'Enter'}))}})}catch(e){}}
