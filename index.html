@@ -334,7 +334,7 @@ function netHost(){
  let code='';for(let i=0;i<4;i++)code+=CODEC[Math.random()*CODEC.length|0];
  const N=NET={st:'host',role:0,n:Math.min(4,Math.max(2,NP)),code,rh:{},hh:{},L:{},slots:{},rp:{},pcs:[],conn:0};ME=0;state='net';resetSel();
  if(typeof RTCPeerConnection!='undefined')N.rl=rlOpen('nrmp-'+code,m=>relayJoin(N,m));
- if(typeof Peer!='undefined'){const pr=N.peer=new Peer('ninjarumble-'+code);
+ if(typeof Peer!='undefined'){const pr=N.peer=new Peer('ninjarumble-'+code,{config:{iceServers:ICE}});
   pr.on('connection',c=>{let p=N.slots[c.peer];if(!p){if(N.ready||!(p=freeSlot(N))){c.close();return}N.slots[c.peer]=p}netAttach(N,c,p)});
   pr.on('error',e=>{if(NET!==N)return;if(e.type=='unavailable-id'){netLeave();netHost()}})}
  setTimeout(()=>{if(NET===N&&!N.ready&&!(N.rl&&N.rl.ok)&&!(N.peer&&N.peer.open))netLeave('Não foi possível criar a sala (rede bloqueada?). Use M / J (sem servidor).')},12000)}
@@ -342,14 +342,14 @@ function netJoin(code){
  const N=NET={st:'conn',role:1,n:2,code,cid:Math.random().toString(36).slice(2),rh:{},hh:{},L:{},pcs:[]};ME=1;resetSel();
  const fb=()=>{if(NET===N&&!N.linked&&!N.fb&&typeof RTCPeerConnection!='undefined')relayClient(N)};
  if(typeof Peer=='undefined')fb();else{
-  const pr=N.peer=new Peer(),t=setTimeout(fb,5000);
-  pr.on('open',()=>{clearTimeout(t);if(N.fb)return;const id='ninjarumble-'+code;netAttach(N,pr.connect(id,{label:'c',reliable:true,serialization:'json'}),0);netAttach(N,pr.connect(id,{label:'i',reliable:false,serialization:'json'}),0)});
-  pr.on('error',e=>{clearTimeout(t);fb()})}
- setTimeout(()=>{if(NET===N&&!N.linked)netLeave('Sala não encontrada ou rede bloqueada. Confira o código ou use o modo sem servidor (J).')},32000)}
+  const pr=N.peer=new Peer(undefined,{config:{iceServers:ICE}}),t=setTimeout(fb,5000);
+  pr.on('open',()=>{clearTimeout(t);if(N.fb)return;N.sig=1;const id='ninjarumble-'+code;netAttach(N,pr.connect(id,{label:'c',reliable:true,serialization:'json'}),0);netAttach(N,pr.connect(id,{label:'i',reliable:false,serialization:'json'}),0)});
+  pr.on('error',e=>{clearTimeout(t);if(e.type=='peer-unavailable')N.sig=0;fb()})}
+ setTimeout(()=>{if(NET===N&&!N.linked)netLeave(N.sig?'Achei a sala, mas a conexão direta não abriu (VPN ou rede de casa). Desligue a VPN ou use o modo sem servidor (J).':'Sala não encontrada ou rede bloqueada. Confira o código ou use o modo sem servidor (J).')},32000)}
 function icGather(pc){return new Promise(r=>{if(pc.iceGatheringState=='complete')return r();const t=setTimeout(r,4000);pc.addEventListener('icegatheringstatechange',()=>{if(pc.iceGatheringState=='complete'){clearTimeout(t);r()}})})}
 function dcWrap(d){const h={},f=(e,a)=>(h[e]||[]).forEach(g=>g(a));d.onopen=()=>f('open');d.onclose=()=>f('close');d.onerror=()=>f('error');d.onmessage=e=>{try{f('data',JSON.parse(e.data))}catch(x){}};return{label:d.label,get open(){return d.readyState=='open'},send:m=>d.send(JSON.stringify(m)),on:(e,g)=>{(h[e]=h[e]||[]).push(g)}}}
 function netCopy(N,ask){try{navigator.clipboard.writeText(N.txt).then(()=>{N.copied=1},()=>{if(ask)prompt('Copie o código (Ctrl+C):',N.txt)})}catch(e){if(ask)prompt('Copie o código (Ctrl+C):',N.txt)}}
-function netNewPc(N,fail){const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});N.pc=pc;N.pcs.push(pc);pc.oniceconnectionstatechange=()=>{if(NET===N&&!N.ready&&pc.iceConnectionState=='failed')fail?fail():netLeave('Não deu para conectar direto. A rede isola os PCs?')};return pc}
+function netNewPc(N,fail){const pc=new RTCPeerConnection({iceServers:ICE});N.pc=pc;N.pcs.push(pc);pc.oniceconnectionstatechange=()=>{if(NET===N&&!N.ready&&pc.iceConnectionState=='failed')fail?fail():netLeave('Não deu para conectar direto. A rede isola os PCs?')};return pc}
 function netManualOffer(N){const slot=N.conn+1;N.slot=slot;N.txt=null;N.note='';N.st='mhost';const pc=netNewPc(N);
  netAttach(N,dcWrap(pc.createDataChannel('c')),slot);netAttach(N,dcWrap(pc.createDataChannel('i',{ordered:false,maxRetransmits:0})),slot);
  pc.createOffer().then(o=>pc.setLocalDescription(o)).then(()=>icGather(pc)).then(()=>{if(NET!==N||N.pc!==pc)return;N.txt='NR1:'+btoa(JSON.stringify(pc.localDescription));netCopy(N)}).catch(()=>netLeave('Não foi possível gerar o código.'))}
@@ -371,6 +371,8 @@ function netDiag(){const N=NET={st:'diag',res:[]};state='net';
  const d3=add('ntfy.sh (receber em tempo real)');try{const es=new EventSource('https://ntfy.sh/nrdiag'+Date.now()+'/sse');es.onopen=()=>{d3(1,'OK');es.close()};es.onerror=()=>{if(es.readyState==2)d3(0,'BLOQUEADO')};setTimeout(()=>{d3(0,'sem resposta (bloqueado)');es.close()},6000)}catch(e){d3(0,'BLOQUEADO')}
  const dl=add('Rede local (PC com PC)'),ds=add('STUN (internet UDP)');
  try{const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]}),ty={};pc.createDataChannel('x');pc.onicecandidate=e=>{const m=e.candidate&&/ typ (\w+)/.exec(e.candidate.candidate);if(m)ty[m[1]]=1};pc.createOffer().then(o=>pc.setLocalDescription(o));setTimeout(()=>{pc.close();dl(!!ty.host,ty.host?'OK':'sem candidato local');ds(!!ty.srflx,ty.srflx?'OK':'bloqueado (ok se estiverem na mesma rede)')},5500)}catch(e){dl(0,'WebRTC indisponível');ds(0,'WebRTC indisponível')}}
+const METERED=['',''];let ICE=[{urls:'stun:stun.l.google.com:19302'}];
+(function(){if(!METERED[0])return;fetch('https://'+METERED[0]+'.metered.live/api/v1/turn/credentials?apiKey='+METERED[1]).then(r=>r.json()).then(a=>{if(Array.isArray(a)&&a.length)ICE=[{urls:'stun:stun.l.google.com:19302'},...a]}).catch(()=>{})})();
 function netKey(e){const c=e.code,N=NET||(NET={st:'idle'});
  if(N.st=='idle'||N.st=='err'){if(c=='Escape'){NET=null;state='menu';return}if(c=='KeyC')netHost();if(c=='KeyE')NET={st:'code',buf:''};if(/^(Digit|Numpad)[234]$/.test(c)){NP=+c.slice(-1);sv()}if(c=='KeyD')netDiag();if(c=='KeyM')netManual(1);if(c=='KeyJ')netManual(0);return}
  if(N.st=='diag'){if(c=='Escape')NET={st:'idle'};return}
