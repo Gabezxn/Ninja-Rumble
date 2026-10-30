@@ -371,7 +371,7 @@ function netDiag(){const N=NET={st:'diag',res:[]};state='net';
  const d3=add('ntfy.sh (receber em tempo real)');try{const es=new EventSource('https://ntfy.sh/nrdiag'+Date.now()+'/sse');es.onopen=()=>{d3(1,'OK');es.close()};es.onerror=()=>{if(es.readyState==2)d3(0,'BLOQUEADO')};setTimeout(()=>{d3(0,'sem resposta (bloqueado)');es.close()},6000)}catch(e){d3(0,'BLOQUEADO')}
  const dl=add('Rede local (PC com PC)'),ds=add('STUN (internet UDP)');
  try{const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]}),ty={};pc.createDataChannel('x');pc.onicecandidate=e=>{const m=e.candidate&&/ typ (\w+)/.exec(e.candidate.candidate);if(m)ty[m[1]]=1};pc.createOffer().then(o=>pc.setLocalDescription(o));setTimeout(()=>{pc.close();dl(!!ty.host,ty.host?'OK':'sem candidato local');ds(!!ty.srflx,ty.srflx?'OK':'bloqueado (ok se estiverem na mesma rede)')},5500)}catch(e){dl(0,'WebRTC indisponível');ds(0,'WebRTC indisponível')}}
-const METERED=['',''];let ICE=[{urls:'stun:stun.l.google.com:19302'}];
+const METERED=['ninjarumble','13c0db5ce5c6a354d50b7bd84c8b83e876f2'];let ICE=[{urls:'stun:stun.l.google.com:19302'}];
 (function(){if(!METERED[0])return;fetch('https://'+METERED[0]+'.metered.live/api/v1/turn/credentials?apiKey='+METERED[1]).then(r=>r.json()).then(a=>{if(Array.isArray(a)&&a.length)ICE=[{urls:'stun:stun.l.google.com:19302'},...a]}).catch(()=>{})})();
 function netKey(e){const c=e.code,N=NET||(NET={st:'idle'});
  if(N.st=='idle'||N.st=='err'){if(c=='Escape'){NET=null;state='menu';return}if(c=='KeyC')netHost();if(c=='KeyE')NET={st:'code',buf:''};if(/^(Digit|Numpad)[234]$/.test(c)){NP=+c.slice(-1);sv()}if(c=='KeyD')netDiag();if(c=='KeyM')netManual(1);if(c=='KeyJ')netManual(0);return}
