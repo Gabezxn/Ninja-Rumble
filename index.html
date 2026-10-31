@@ -274,7 +274,7 @@ function draw(){T++;rs();
  X.restore();vig();if(fl2>0){X.fillStyle='rgba(255,255,255,'+fl2*.04+')';X.fillRect(0,0,1280,720);fl2--}hud3();arrows();modeHud();netHud();bannerDraw();if(pz){X.fillStyle='rgba(0,0,0,.55)';X.fillRect(0,0,1280,720);X.fillStyle='#fff';X.textAlign='center';X.font='bold 72px Impact,Arial Black,sans-serif';X.fillText('PAUSADO',640,pc?90:340);X.font='20px sans-serif';X.fillText('P continuar · C controles · M menu',640,pc?120:390);if(pc)ctrl()}if(state!='play')overlay();else if(vs>0)drawVS();else if(cdn>0){X.textAlign='center';X.fillStyle='#fff';X.font='bold 140px system-ui,sans-serif';X.fillText(Math.ceil(cdn/60),640,380)}
 }
 function rr(){SEED=(SEED+0x6D2B79F5)|0;let t=Math.imul(SEED^SEED>>>15,1|SEED);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}
-const ND=2,NMAX=10,CODEC='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+let ND=2,NMAX=10;const CODEC='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const unp=b=>[b&1,b>>1&1,b>>2&1,b>>3&1];
 function pack(){const g=j=>(K[KEYS[0][j]]||K[KEYS[3][j]])?1:0;return g(0)|g(1)<<1|g(2)<<2|g(3)<<3}
 function snap(){return structuredClone({ps,cr,pj,elim,win,ul,px:PL[2].x,v:[SEED,F,ct,tm,sm,cdn,hs,vs,state]})}
@@ -284,7 +284,8 @@ function runFrame(f){const N=NET;OIN=[];for(let p=0;p<N.n;p++){if(N.gone[p]&&f>=
 function resim(m,to){const N=NET,sv=[words,rg_,kl,fx,shake,bn];words=[];rg_=[];kl=[];fx=[];RS=1;rest(N.SNAP[m]);for(let f=m;f<to;f++){N.SNAP[f]=snap();runFrame(f)}RS=0;[words,rg_,kl,fx,shake,bn]=sv}
 function minRk(){const N=NET;let m=1e9;for(let p=0;p<N.n;p++)if(p!=ME&&!(N.gone[p]&&N.rk[p]>=N.dropF[p]-1))m=Math.min(m,N.rk[p]);return m}
 function hchk(f){const N=NET,h=N.hh[f];if(h===undefined)return 0;const r=N.rh[f]||{};for(const p in r)if(r[p]!==h){netLeave('Os jogos dessincronizaram (use o mesmo navegador em todos).');return 1}return 0}
-function netSendIn(e){const N=NET;for(const j in N.L){const l=N.L[j],c=l.ci&&l.ci.open?l.ci:l.cc;if(!c||!c.open||!l.ak)continue;const st=[];for(let p=0;p<N.n;p++){if(p==j||(N.role!=0&&p!=ME))continue;const end=p==ME?e:N.rk[p],s=Math.max(l.ak[p]+1,end-30);if(s>end)continue;const a=[];for(let f=s;f<=end;f++)a.push(p==ME?N.li[f]|0:N.ri[p][f]|0);st.push([p,s,a])}try{c.send({t:'in',r:N.rd,k:N.rk,st})}catch(x){}}}
+function netSendIn(e){const N=NET;for(const j in N.L){const l=N.L[j],c=l.ci&&l.ci.open?l.ci:l.cc;if(!c||!c.open||!l.ak)continue;const st=[];for(let p=0;p<N.n;p++){if(p==j||(N.role!=0&&p!=ME))continue;const end=p==ME?e:N.rk[p],s=Math.max(l.ak[p]+1,end-30);if(s>end)continue;const a=[];for(let f=s;f<=end;f++)a.push(p==ME?N.li[f]|0:N.ri[p][f]|0);st.push([p,s,a])}try{c.send({t:'in',r:N.rd,k:N.rk,st})}catch(x){}}
+ if(N.role!=0&&N.M)for(const q in N.M){const l=N.M[q];if(!l.ci||!l.ci.open||N.gone[q])continue;const s=Math.max(l.ak[ME]+1,e-30);if(s>e)continue;const a=[];for(let f=s;f<=e;f++)a.push(N.li[f]|0);try{l.ci.send({t:'in',r:N.rd,k:N.rk,st:[[ME,s,a]]})}catch(x){}}}
 function netTick(){const N=NET;
  if(performance.now()-N.last>7000&&Object.keys(N.gone).length<N.n-1){netLeave('Conexão perdida.');return}
  if(N.mis<F){const m=Math.max(N.mis,F-85);if(N.SNAP[m]){N.rb+=F-m;resim(m,F)}}
@@ -296,14 +297,15 @@ function netTick(){const N=NET;
  if(F-mk>NMAX){N.stall=1;return}
  N.stall=0;N.SNAP[F]=snap();runFrame(F);
  const o=F-100;delete N.SNAP[o];delete N.li[o];for(let p=0;p<N.n;p++){delete N.ri[p][o];delete N.used[p][o]}delete N.hh[o-60];delete N.rh[o-60]}
-function netIn(m,j){const N=NET;if(!N.run||m.r!=N.rd)return;const l=N.L[j];
+function netIn(m,l){const N=NET;if(!N.run||m.r!=N.rd)return;
  m.st.forEach(([p,s,a])=>{if(p==ME||!N.ri[p])return;a.forEach((b,i)=>{const f=s+i;if(f<F-90||N.ri[p][f]!==undefined)return;N.ri[p][f]=b;const u=N.used[p][f];if(u!==undefined&&u!==b&&f<N.mis)N.mis=f});while(N.ri[p][N.rk[p]+1]!==undefined)N.rk[p]++});
  if(l&&l.ak)m.k.forEach((v,p)=>{if(v>l.ak[p])l.ak[p]=v});N.last=performance.now()}
 function lsend(j,m){const l=NET&&NET.L[j],c=l&&l.cc;if(c&&c.open)try{c.send(m)}catch(e){}}
 function bcast(m,ex){const N=NET;if(!N)return;for(const j in N.L)if(j!=ex)lsend(j,m)}
 function nsend(m){const N=NET;if(!N)return;for(const j in N.L){const l=N.L[j],c=l.ci&&l.ci.open?l.ci:l.cc;if(c&&c.open)try{c.send(m)}catch(e){}}}
 function netMsg(m,j){const N=NET;if(!N||!m)return;
- if(m.t=='in')return netIn(m,j);
+ if(m.t=='in')return netIn(m,N.L[j]);
+ if(m.t=='sig'){if(N.role==0)lsend(m.to,m);else meshSig(m);return}
  if(m.t=='p')return lsend(j,{t:'pp',ts:m.ts});
  if(m.t=='pp'){const d=performance.now()-m.ts;N.rtt=N.rtt?N.rtt*.7+d*.3:d;return}
  if(m.t=='h'){if(m.r==N.rd){(N.rh[m.f]=N.rh[m.f]||{})[m.p]=m.h;hchk(m.f)}return}
@@ -319,13 +321,18 @@ function netGone(p){const N=NET;if(!N||N.gone[p])return;
  if(!N.ready){if(N.man){netLeave('Um jogador saiu antes de começar.');return}for(const k in N.slots)if(N.slots[k]==p)delete N.slots[k];delete N.L[p];N.conn=Math.max(0,N.conn-1);return}
  const f=N.run?N.rk[p]+1:0;N.gone[p]=1;N.dropF[p]=f;sel[p].ok=1;delete N.L[p];banner('UM AMIGO SAIU','#ff8a80');bcast({t:'gone',p:+p,f});if(!N.run){netSelCheck();netRmCheck()}}
 function netLink(p){const N=NET;if(N.role==0){N.conn=(N.conn||0)+1;lsend(p,{t:'welcome',p:+p,n:N.n});if(N.conn>=N.n-1)netBegin()}else{N.linked=1;N.st='lobby'}}
-function netBegin(){const N=NET;try{N.rl&&N.rl.close()}catch(e){}if(MODE>2)MODE=0;const cfg={MP,MODE,OV,OT,OC,BL,n:N.n};bcast({t:'go',cfg});netGo(cfg)}
-function netGo(c){const N=NET;if(!N||N.ready)return;N.ready=1;ONLINE=1;ME=N.role;N.n=NP=c.n;NB=0;MP=c.MP;MODE=c.MODE;OV=c.OV;OT=c.OT;OC=c.OC;BL=c.BL||BL;N.rd=0;N.rmR={};resetSel();Object.assign(sel[ME],{c:rnd(),sk:0,ok:0});state='sel';bcast({t:'sel',p:ME,c:sel[ME].c,sk:0,ok:0})}
+function meshLink(N,c,q){const l=N.M[q]=N.M[q]||{ak:Array(N.n).fill(ND-1)};c.on('open',()=>{if(NET===N)l.ci=c});if(c.open)l.ci=c;c.on('data',m=>{if(NET===N&&m&&m.t=='in')netIn(m,l)});c.on('close',()=>{if(NET===N&&l.ci===c)l.ci=null});c.on('error',()=>{})}
+function meshPc(N,q){const pc=new RTCPeerConnection({iceServers:ICE});N.pcs.push(pc);N.mp[q]=pc;return pc}
+function meshOffer(q){const N=NET,pc=meshPc(N,q);meshLink(N,dcWrap(pc.createDataChannel('i',{ordered:false,maxRetransmits:0})),q);pc.createOffer().then(o=>pc.setLocalDescription(o)).then(()=>icGather(pc)).then(()=>{if(NET===N)lsend(0,{t:'sig',to:q,from:ME,k:'o',d:pc.localDescription})}).catch(()=>{})}
+function meshSig(m){const N=NET;if(!N||N.role==0||typeof RTCPeerConnection=='undefined')return;const q=m.from;if(m.k=='o'){const pc=meshPc(N,q);pc.ondatachannel=e=>meshLink(N,dcWrap(e.channel),q);pc.setRemoteDescription(m.d).then(()=>pc.createAnswer()).then(a=>pc.setLocalDescription(a)).then(()=>icGather(pc)).then(()=>{if(NET===N)lsend(0,{t:'sig',to:q,from:ME,k:'a',d:pc.localDescription})}).catch(()=>{})}else if(m.k=='a'&&N.mp[q])N.mp[q].setRemoteDescription(m.d).catch(()=>{})}
+function meshStart(){const N=NET;if(!N||N.role==0||N.meshOn||typeof RTCPeerConnection=='undefined')return;N.meshOn=1;for(let q=1;q<N.n;q++)if(q!=ME&&q>ME&&!N.gone[q])meshOffer(q)}
+function netBegin(){const N=NET;try{N.rl&&N.rl.close()}catch(e){}if(MODE>2)MODE=0;const cfg={MP,MODE,OV,OT,OC,BL,n:N.n};for(const j in N.L)lsend(j,{t:'go',cfg:Object.assign({p:+j},cfg)});netGo(cfg)}
+function netGo(c){const N=NET;if(!N||N.ready)return;if(c.p>0)N.role=c.p;N.ready=1;ONLINE=1;ME=N.role;N.n=NP=c.n;NB=0;MP=c.MP;MODE=c.MODE;OV=c.OV;OT=c.OT;OC=c.OC;BL=c.BL||BL;N.rd=0;N.rmR={};resetSel();Object.assign(sel[ME],{c:rnd(),sk:0,ok:0});state='sel';bcast({t:'sel',p:ME,c:sel[ME].c,sk:0,ok:0});meshStart()}
 function netCfg(rd){const N=NET;return{MP,MODE,OV,OT,OC,BL,n:N.n,seed:Math.random()*4294967296|0,rd,sel:sel.slice(0,N.n).map(s=>({c:s.c,sk:s.sk}))}}
 function netSelCheck(){const N=NET;if(!N||N.role!=0||N.run||!N.ready||!sel.slice(0,N.n).every(s=>s.ok))return;const cfg=netCfg(1);bcast({t:'start',cfg});startOnline(cfg)}
 function netRmCheck(){const N=NET;if(!N||N.role!=0||!N.rmL)return;for(let p=1;p<N.n;p++)if(!N.rmR[p]&&!N.gone[p])return;const cfg=netCfg(N.rd+1);bcast({t:'start',cfg});startOnline(cfg)}
 function netRematch(){const N=NET;if(!N||N.rmL)return;N.rmL=1;bcast({t:'rm',p:ME});netRmCheck()}
-function startOnline(cfg){const N=NET;if(!N)return;MP=cfg.MP;MODE=cfg.MODE;OV=cfg.OV;OT=cfg.OT;OC=cfg.OC;BL=cfg.BL||BL;N.n=NP=cfg.n;NB=0;for(let i=0;i<cfg.n;i++){sel[i].c=cfg.sel[i].c;sel[i].sk=cfg.sel[i].sk;sel[i].ok=1}SEED=cfg.seed;ONLINE=1;ME=N.role;N.rd=cfg.rd;N.li={};N.ri=[];N.used=[];N.rk=[];for(let p=0;p<N.n;p++){N.ri[p]={};N.used[p]={};N.rk[p]=ND-1;if(p!=ME)for(let f=0;f<ND;f++)N.ri[p][f]=0}for(const j in N.L)N.L[j].ak=Array(N.n).fill(ND-1);N.SNAP={};N.hh={};N.rh={};N.hc=60;N.mis=1e9;N.rb=0;N.rmL=0;N.rmR={};N.stall=0;N.last=performance.now();for(let f=0;f<ND;f++)N.li[f]=0;start();for(const p in N.gone){N.dropF[p]=0;if(ps[p])ps[p].bot=1}N.run=1}
+function startOnline(cfg){const N=NET;if(!N)return;ND=cfg.n<3?2:cfg.n==3?3:4;NMAX=cfg.n<3?10:14;MP=cfg.MP;MODE=cfg.MODE;OV=cfg.OV;OT=cfg.OT;OC=cfg.OC;BL=cfg.BL||BL;N.n=NP=cfg.n;NB=0;for(let i=0;i<cfg.n;i++){sel[i].c=cfg.sel[i].c;sel[i].sk=cfg.sel[i].sk;sel[i].ok=1}SEED=cfg.seed;ONLINE=1;ME=N.role;N.rd=cfg.rd;N.li={};N.ri=[];N.used=[];N.rk=[];for(let p=0;p<N.n;p++){N.ri[p]={};N.used[p]={};N.rk[p]=ND-1;if(p!=ME)for(let f=0;f<ND;f++)N.ri[p][f]=0}for(const j in N.L)N.L[j].ak=Array(N.n).fill(ND-1);for(const j in N.M||{})N.M[j].ak=Array(N.n).fill(ND-1);N.SNAP={};N.hh={};N.rh={};N.hc=60;N.mis=1e9;N.rb=0;N.rmL=0;N.rmR={};N.stall=0;N.last=performance.now();for(let f=0;f<ND;f++)N.li[f]=0;start();for(const p in N.gone){N.dropF[p]=0;if(ps[p])ps[p].bot=1}N.run=1}
 function onSelKey(e){const N=NET,s=sel[N.role],c=e.code;let ch=0;
  if(c=='KeyA'||c=='ArrowLeft'){do{s.c=(s.c+15)%16}while(!unl(s.c));ch=1}
  else if(c=='KeyD'||c=='ArrowRight'){do{s.c=(s.c+1)%16}while(!unl(s.c));ch=1}
@@ -356,7 +363,7 @@ function netHost(){
   pr.on('error',e=>{if(NET!==N)return;if(e.type=='unavailable-id'){netLeave();netHost()}})}
  setTimeout(()=>{if(NET===N&&!N.ready&&!(N.rl&&N.rl.ok)&&!(N.peer&&N.peer.open))netLeave('Não foi possível criar a sala (rede bloqueada?). Use M / J (sem servidor).')},12000)}
 function netJoin(code){
- const N=NET={st:'conn',role:1,n:2,code,cid:Math.random().toString(36).slice(2),rh:{},hh:{},L:{},pcs:[],gone:{},dropF:{}};ME=1;resetSel();
+ const N=NET={st:'conn',role:1,n:2,code,cid:Math.random().toString(36).slice(2),rh:{},hh:{},L:{},pcs:[],M:{},mp:{},gone:{},dropF:{}};ME=1;resetSel();
  const fb=()=>{if(NET===N&&!N.linked&&!N.fb&&typeof RTCPeerConnection!='undefined')relayClient(N)};
  if(typeof Peer=='undefined')fb();else{
   const pr=N.peer=new Peer(undefined,{config:{iceServers:ICE}}),t=setTimeout(fb,5000);
@@ -372,7 +379,7 @@ function b64d(t){const s=atob(t),u=new Uint8Array(s.length);for(let i=0;i<s.leng
 async function ncEnc(o){let u=new TextEncoder().encode(JSON.stringify(o)),z='p';if(typeof CompressionStream!='undefined'){try{u=new Uint8Array(await new Response(new Blob([u]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer());z='z'}catch(e){}}return'NR2'+z+b64e(u)}
 async function ncDec(t){const m=/NR2([zp])([A-Za-z0-9+\/]+=*)/.exec(String(t).replace(/\s+/g,''));if(!m)throw 0;let u=b64d(m[2]);if(m[1]=='z')u=new Uint8Array(await new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());return JSON.parse(new TextDecoder().decode(u))}
 function netManual(host){if(typeof RTCPeerConnection=='undefined')return netFail('Seu navegador não suporta conexão direta.');
- const N=NET={st:host?'mhost':'mwait',role:host?0:1,n:host?Math.min(4,Math.max(2,NP)):2,rh:{},hh:{},L:{},pcs:[],pcb:{},got:{},conn:0,man:1,txt:null,gone:{},dropF:{},note:''};ME=N.role;state='net';resetSel();
+ const N=NET={st:host?'mhost':'mwait',role:host?0:1,n:host?Math.min(4,Math.max(2,NP)):2,rh:{},hh:{},L:{},pcs:[],pcb:{},got:{},conn:0,man:1,txt:null,M:{},mp:{},gone:{},dropF:{},note:''};ME=N.role;state='net';resetSel();
  N.peer={destroy:()=>N.pcs.forEach(p=>{try{p.close()}catch(e){}})};
  if(!host)return;
  const offs=[];let left=N.n-1;
